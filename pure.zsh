@@ -23,6 +23,11 @@
 # \e[K  => clears everything after the cursor on the current line
 # \e[2K => clear everything on the current line
 
+MODE_INDICATOR="%F{yellow}❮❮❮%F{normal}"
+	PROMPT='%(?.%F{magenta}.%F{red})${PURE_PROMPT_SYMBOL:-❯}%f '
+TRAPWINCH() {
+	prompt_pure_preprompt_render
+}
 
 # turns seconds into human readable time
 # 165392 => 1d 21h 56m 32s
@@ -116,7 +121,7 @@ prompt_pure_preprompt_render() {
 	[[ -n ${prompt_pure_cmd_timestamp+x} && "$1" != "precmd" ]] && return
 
 	# set color for git branch/dirty status, change color if dirty checking has been delayed
-	local git_color=242
+	local git_color=8
 	[[ -n ${prompt_pure_git_last_dirty_check_timestamp+x} ]] && git_color=red
 
 	# construct preprompt, beginning with path
@@ -125,10 +130,23 @@ prompt_pure_preprompt_render() {
 	preprompt+="%F{$git_color}${vcs_info_msg_0_}${prompt_pure_git_dirty}%f"
 	# git pull/push arrows
 	preprompt+="%F{cyan}${prompt_pure_git_arrows}%f"
-	# username and machine if applicable
-	preprompt+=$prompt_pure_username
 	# execution time
 	preprompt+="%F{yellow}${prompt_pure_cmd_exec_time}%f"
+
+	# Create the right prompt
+	local right_prompt="%F{green}${prompt_pure_node_version}%f"
+	# username and machine if applicable
+	right_prompt+=$prompt_pure_username
+
+	# Create the correct amount of whitespace
+	integer preprompt_length rightprompt_length whitespace_length
+	local spacer
+	prompt_pure_string_length_to_var "${preprompt}" "preprompt_length"
+	prompt_pure_string_length_to_var "${right_prompt}" "rightprompt_length"
+	whitespace_length=$(($COLUMNS - $preprompt_length - $rightprompt_length))
+	spacer=$(printf ' %.0s' {1..$whitespace_length})
+
+	preprompt+="${spacer}${right_prompt}"
 
 	# make sure prompt_pure_last_preprompt is a global array
 	typeset -g -a prompt_pure_last_preprompt
@@ -142,7 +160,6 @@ prompt_pure_preprompt_render() {
 
 		# calculate length of preprompt and store it locally in preprompt_length
 		integer preprompt_length lines
-		prompt_pure_string_length_to_var "${preprompt}" "preprompt_length"
 
 		# calculate number of preprompt lines for redraw purposes
 		(( lines = ( preprompt_length - 1 ) / COLUMNS + 1 ))
@@ -306,6 +323,9 @@ prompt_pure_async_tasks() {
 		prompt_pure_current_working_tree="x${working_tree}"
 	fi
 
+	# fetch the node version asynchronously
+	async_job "prompt_pure" prompt_pure_async_node_version $working_tree
+
 	# only perform tasks inside git working tree
 	[[ -n $working_tree ]] || return
 
@@ -331,6 +351,18 @@ prompt_pure_async_tasks() {
 		# check check if there is anything to pull
 		async_job "prompt_pure" prompt_pure_async_git_dirty ${PURE_GIT_UNTRACKED_DIRTY:-1} $working_tree
 	fi
+}
+
+prompt_pure_async_node_version() {
+	local dir=$1
+
+	if [[ -n $dir ]]; then
+		builtin cd -q $dir
+	fi
+
+	command node --version
+
+	return $?
 }
 
 prompt_pure_check_git_arrows() {
@@ -382,6 +414,12 @@ prompt_pure_async_callback() {
 				fi
 			fi
 			;;
+		prompt_pure_async_node_version)
+			if [[ -n $output ]]; then
+				prompt_pure_node_version="⬢ ${output}"
+				prompt_pure_preprompt_render
+			fi
+			;;
 	esac
 }
 
@@ -424,10 +462,10 @@ prompt_pure_setup() {
 	fi
 
 	# show username@host if logged in through SSH
-	[[ "$SSH_CONNECTION" != '' ]] && prompt_pure_username=' %F{242}%n@%m%f'
+	[[ "$SSH_CONNECTION" != '' ]] && prompt_pure_username=' %F{8}%n@%m%f'
 
 	# show username@host if root, with username in white
-	[[ $UID -eq 0 ]] && prompt_pure_username=' %F{white}%n%f%F{242}@%m%f'
+	[[ $UID -eq 0 ]] && prompt_pure_username=' %F{white}%n%f%F{8}@%m%f'
 
 	# prompt turns red if the previous command didn't exit with 0
 	PROMPT='%(?.%F{magenta}.%F{red})${PURE_PROMPT_SYMBOL:-❯}%f '
