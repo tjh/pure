@@ -121,7 +121,7 @@ prompt_pure_preprompt_render() {
 	[[ -n ${prompt_pure_cmd_timestamp+x} && "$1" != "precmd" ]] && return
 
 	# set color for git branch/dirty status, change color if dirty checking has been delayed
-	local git_color=8
+	local git_color=green
 	[[ -n ${prompt_pure_git_last_dirty_check_timestamp+x} ]] && git_color=red
 
 	# construct preprompt, beginning with path
@@ -134,7 +134,7 @@ prompt_pure_preprompt_render() {
 	preprompt+="%F{yellow}${prompt_pure_cmd_exec_time}%f"
 
 	# Create the right prompt
-	local right_prompt="%F{green}${prompt_pure_node_version}%f"
+	local right_prompt="%F{gray}${prompt_pure_ruby_version}${prompt_pure_node_version}%f"
 	# username and machine if applicable
 	right_prompt+=$prompt_pure_username
 
@@ -326,6 +326,9 @@ prompt_pure_async_tasks() {
 	# fetch the node version asynchronously
 	async_job "prompt_pure" prompt_pure_async_node_version $working_tree
 
+	# fetch the node version asynchronously
+	async_job "prompt_pure" prompt_pure_async_ruby_version $working_tree
+
 	# only perform tasks inside git working tree
 	[[ -n $working_tree ]] || return
 
@@ -351,6 +354,18 @@ prompt_pure_async_tasks() {
 		# check check if there is anything to pull
 		async_job "prompt_pure" prompt_pure_async_git_dirty ${PURE_GIT_UNTRACKED_DIRTY:-1} $working_tree
 	fi
+}
+
+prompt_pure_async_ruby_version() {
+	local dir=$1
+
+	if [[ -n $dir ]]; then
+		builtin cd -q $dir
+	fi
+
+	command ruby -v | cut -d' ' -f2
+
+	return $?
 }
 
 prompt_pure_async_node_version() {
@@ -414,9 +429,15 @@ prompt_pure_async_callback() {
 				fi
 			fi
 			;;
+		prompt_pure_async_ruby_version)
+			if [[ -n $output ]]; then
+				prompt_pure_ruby_version=" R ${output}"
+				prompt_pure_preprompt_render
+			fi
+			;;
 		prompt_pure_async_node_version)
 			if [[ -n $output ]]; then
-				prompt_pure_node_version="⬢ ${output}"
+				prompt_pure_node_version=" ⬢ ${output}"
 				prompt_pure_preprompt_render
 			fi
 			;;
